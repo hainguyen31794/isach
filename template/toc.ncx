@@ -8,13 +8,13 @@
 <meta name="dtb:maxPageNumber" content="0" />
 </head>
 <docTitle>
-<text>{{book}}</text>
+<text>{{info[0]}}</text>
 </docTitle>
 <navMap>
 <navPoint id="cover" playOrder="1"><navLabel><text>Bìa</text></navLabel><content src="cover.html" /></navPoint>
 <navPoint id="title" playOrder="2"><navLabel><text>Tựa đề</text></navLabel><content src="title.html" /></navPoint>
-{% for play, name in datas.items()|sort %}
-<navPoint id="{{play}}" playOrder="{{loop.index +2}}"><navLabel><text>{{name}}</text></navLabel><content src="text/{{id}}" /></navPoint>
+{% for i in info[2::] %}
+<navPoint id="chapter_{{i[0][-4::]}}" playOrder="{{loop.index +2}}"><navLabel><text>{{i[1]}}</text></navLabel><content src="text/{{loop.index}}.html" /></navPoint>
 {% endfor %}
 </navMap>
 </ncx>

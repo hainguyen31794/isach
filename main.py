@@ -6,7 +6,6 @@ import requests
 import os
 from shutil import make_archive, copytree
 from jinja2 import Environment, FileSystemLoader
-from itertools import cycle
 
 def free_proxy():
     """ Thay đổi địa chỉ ip bằng proxy"""
@@ -18,24 +17,57 @@ def free_proxy():
         if (i.select('td')[6].contents[0]) == "yes":
             proxies.add((i.select('td')[0].contents[0]) + ":" + (i.select('td')[1].contents[0]))
     print("Lay proxy thanh cong! ")
-    print(proxies)
     return proxies
 
-def beauti(url, proxies={"http": "167.99.28.59:8080", "https": "167.99.28.59:8080"}):
+def beauti(url, proxies={"http": "81.23.118.106:21231", "https": "81.23.118.106:21231"}):
     """ Tạo requests đến trang đích """
-    res = requests.get(url, proxies=proxies)
-    parser = BeautifulSoup(res.text, "html.parser")
-    return parser
-
+    res = requests.get(url)
+    return res
+def directory(url):
+    return url[42:-13:]
 
 def link_chapter(url):
     """ Lấy link chapter của mỗi truyện """
-    parser = beauti(url)
+    res = beauti(url)
+    parser = BeautifulSoup(res.text, "html.parser")
     links = parser.find_all("div", class_="right_menu_item")
     print(" Dang lay link chapter ! ")
+    list_link = []
+    title = parser.title.text
+    info = re.split("-|~", title)
+    list_link.append(info[0])
+    list_link.append(info[1])
     for link in links:
-        yield ("https://isach.info/mobile/" + link.a["href"])
+        list_link.append(("https://isach.info/mobile/" + link.a["href"], link.text))
+    
 
+    
+    return list_link
+
+
+def noidung_chapter(folder, link_chapters):
+    content_chapter = None
+    i = 1
+    top = """<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" /><title>Cho Tôi Xin Một Vé Ði Tuổi Thơ</title>
+<link href="../css/motsach.css" rel="stylesheet" type="text/css" />
+</head>
+<body>"""
+    bot = """</body>
+</html>"""
+    for link in link_chapters[2::]:
+        source = beauti(link[0]).content.decode("utf-8")
+        content_chapter = re.search(r"<div class='ms_chapter'>(.|\n)*<!-- chapter navigator -->", source).group(0)
+        
+        wFile(top +content_chapter + bot, folder + "/OEBPS/text/" + str(i)+ ".html")
+        i += 1
+def cover(url):
+    name = directory(url)
+    res = requests.get("https://isach.info/images/story/cover/"+name +".jpg")
+    with open(name + "/OEBPS/images/cover.jpg", "wb") as f:
+        f.write(res.content)
+        f.close()
 
 def wFile(docs, name):
     """ghi nội dung vào file"""
@@ -45,39 +77,8 @@ def wFile(docs, name):
         f.close()
 
 
-def directory(url):
-    """ Lấy tiêu đề tác phẩm"""
-    return url[42:-13:] + "_" + url[-4::]
 
-def cover(url):
-    """ Lấy ảnh bìa """
-    name = url[42:-13:]
-    url_image = "https://isach.info/images/story/cover/" + name+".jpg"
-    res = requests.get(url_image)
-    with open(name+"\\OEBPS\\images\\cover.jpg", "wb") as f:
-        f.write(res.content)
-        f.close()
-
-def contents(url):
-    """ Lấy giá đối tượng soup trong bs4"""
-    links = link_chapter(url)
-    dic = {}
-    for link in links:
-        print(link)
-        parser = beauti(link)
-        # docx = ""
-        # docs = parser.find_all("div", class_=re.compile("story_poem|ms_chapter|ms_text"))
-        # try:
-        #     docs[1].div['class'] = ["dropcap_" + docs[1].div['class'][0][-1]]
-        # except:
-        #     print("Khong the thay dropcap !")
-        # name = url[42:-13:]
-        # for doc in docs:
-        #     docx += str(doc)
-        # wFile(docx, name +"\\OEBPS\\text\\" + directory(link) + ".html")
-        dic[directory(link)]=(parser.select("#content_body > form > div.ms_chapter")[0].contents[0])
-    return dic
-def jinjaepub(file_name, **kwargs):
+def jinjaepub(file_name, *args, **kwargs):
     file_loader = FileSystemLoader("./template")
     env = Environment(loader=file_loader)
     template = env.get_template(file_name)
@@ -85,13 +86,21 @@ def jinjaepub(file_name, **kwargs):
     return output
 
 if __name__ == "__main__":
-    print(os.getcwd())
+    url = "https://isach.info/mobile/story.php?story=10_van_cau_hoi_vi_sao_hoa_hoc__nguyen_van_mau&chapter=0000"
+    folder = directory(url)
+    link_chapters = link_chapter(url)
+    try:
+        copytree("data", folder)
+    except:
+        pass
 
-    url = "https://isach.info/mobile/story.php?story=cho_toi_xin_mot_ve_di_tuoi_tho__nguyen_nhat_anh&chapter=0000"
-    book = "Hoa Mat Troi"
-    items = ["content.opf", "cover.html", "title.html", "toc.ncx"]
-    datas = contents(url)
-    toc = jinjaepub("toc.ncx", datas=datas, book = book)
-    with open("toc.html", "w", encoding = "utf-8") as f:
-        f.write(toc)
-        f.close()
+    temp = ["content.opf", "toc.ncx", "title.html", "cover.html"]
+    for i in temp:
+        view = jinjaepub(i , info = link_chapters)
+        wFile(view, folder + "/OEBPS/" + i)
+    cover(url)
+    noidung_chapter(folder, link_chapters)
+    make_archive(folder, "zip", folder)
+    os.rename(folder + ".zip", folder +".epub")
+    print("done !")
+    
